@@ -417,6 +417,7 @@ impl TLS13MessageDecrypter {
 pub struct ChaCha20Poly1305MessageEncrypter {
     enc_key: aead::LessSafeKey,
     enc_offset: Iv,
+    raw_key: Vec<u8>,
 }
 
 /// The RFC7905/RFC7539 ChaCha20Poly1305 construction.
@@ -425,6 +426,7 @@ pub struct ChaCha20Poly1305MessageEncrypter {
 pub struct ChaCha20Poly1305MessageDecrypter {
     dec_key: aead::LessSafeKey,
     dec_offset: Iv,
+    raw_key: Vec<u8>,
 }
 
 impl ChaCha20Poly1305MessageEncrypter {
@@ -436,6 +438,7 @@ impl ChaCha20Poly1305MessageEncrypter {
         ChaCha20Poly1305MessageEncrypter {
             enc_key: aead::LessSafeKey::new(key),
             enc_offset: enc_iv,
+            raw_key: enc_key.to_vec(),
         }
     }
 }
@@ -449,13 +452,20 @@ impl ChaCha20Poly1305MessageDecrypter {
         ChaCha20Poly1305MessageDecrypter {
             dec_key: aead::LessSafeKey::new(key),
             dec_offset: dec_iv,
+            raw_key: dec_key.to_vec(),
         }
     }
 }
 
 const CHACHAPOLY1305_OVERHEAD: usize = 16;
 
+use hacspec_chacha20::{Key as HacspecKey, IV as HacspecNonce};
+use hacspec_chacha20poly1305::{decrypt as hacspec_decrypt, encrypt as hacspec_encrypt};
+use hacspec_lib::*;
+use hacspec_poly1305::Tag as HacspecTag;
+
 impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
+
     fn decrypt(&self, mut msg: Message, seq: u64) -> Result<Message, TLSError> {
         let payload = msg.take_opaque_payload()
             .ok_or(TLSError::DecryptError)?;
@@ -467,6 +477,23 @@ impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
 
         let nonce = make_tls13_nonce(&self.dec_offset, seq);
         let aad = make_tls12_aad(seq, msg.typ, msg.version, buf.len() - CHACHAPOLY1305_OVERHEAD);
+        
+        let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
+        let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
+        let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
+        let hacspec_ctxt = ByteSeq::from_public_slice(&buf[0..buf.len()-16]);
+        let hacspec_tag = HacspecTag::from_native_slice(&buf[buf.len()-16..]);
+        println!("hacspec_tag: {:?}", hacspec_tag);
+        println!("hacspec_nonce: {:?}", hacspec_nonce);
+        println!(" ... nonce: {:?}", nonce.as_ref());
+        println!("hacspec_key: {:?}", hacspec_key);
+        println!("hacspec_aad: {:?}", hacspec_aad);
+        println!(" ... aad: {:?}", aad.as_ref());
+        println!("hacspec_ctxt: {:?}", hacspec_ctxt);
+        let (hacspec_ptxt, success) = hacspec_decrypt(hacspec_key, hacspec_nonce,
+                                                      &hacspec_aad, &hacspec_ctxt,
+                                                      hacspec_tag);
+        println!("hacspec_ptxt: {:?}", hacspec_ptxt);
 
         let plain_len = self.dec_key.open_in_place(nonce, aad, &mut buf)
             .map_err(|_| TLSError::DecryptError)?
@@ -475,6 +502,8 @@ impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
         if plain_len > MAX_FRAGMENT_LEN {
             return Err(TLSError::PeerSentOversizedRecord);
         }
+        println!("buf decrypted: {:?}", buf);
+        assert!(success);
 
         buf.truncate(plain_len);
 
