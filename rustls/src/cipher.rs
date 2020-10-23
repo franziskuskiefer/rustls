@@ -478,34 +478,33 @@ impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
         let nonce = make_tls13_nonce(&self.dec_offset, seq);
         let aad = make_tls12_aad(seq, msg.typ, msg.version, buf.len() - CHACHAPOLY1305_OVERHEAD);
         
-        let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
-        let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
-        let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
-        let hacspec_ctxt = ByteSeq::from_public_slice(&buf[0..buf.len()-16]);
-        let hacspec_tag = HacspecTag::from_native_slice(&buf[buf.len()-16..]);
-        println!("hacspec_tag: {:?}", hacspec_tag);
-        println!("hacspec_nonce: {:?}", hacspec_nonce);
-        println!(" ... nonce: {:?}", nonce.as_ref());
-        println!("hacspec_key: {:?}", hacspec_key);
-        println!("hacspec_aad: {:?}", hacspec_aad);
-        println!(" ... aad: {:?}", aad.as_ref());
-        println!("hacspec_ctxt: {:?}", hacspec_ctxt);
-        let (hacspec_ptxt, success) = hacspec_decrypt(hacspec_key, hacspec_nonce,
-                                                      &hacspec_aad, &hacspec_ctxt,
-                                                      hacspec_tag);
-        println!("hacspec_ptxt: {:?}", hacspec_ptxt);
+        let use_hacspec = std::env::var("HACSPEC").unwrap_or("0".to_string()) == "1";
+        if use_hacspec {
+            let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
+            let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
+            let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
+            let hacspec_ctxt = ByteSeq::from_public_slice(&buf[0..buf.len()-16]);
+            let hacspec_tag = HacspecTag::from_native_slice(&buf[buf.len()-16..]);
+            let (hacspec_ptxt, success) = hacspec_decrypt(hacspec_key, hacspec_nonce,
+                                                          &hacspec_aad, &hacspec_ctxt,
+                                                          hacspec_tag);
+            if !success {
+                return Err(TLSError::DecryptError)
+            }
+            for (b, ptxt) in buf.iter_mut().zip(hacspec_ptxt.iter()) {
+                *b =  ptxt.declassify();
+            }
+            buf.truncate(hacspec_ctxt.len());
+        } else {
+            let plain_len = self.dec_key.open_in_place(nonce, aad, &mut buf)
+                .map_err(|_| TLSError::DecryptError)?
+                .len();
 
-        let plain_len = self.dec_key.open_in_place(nonce, aad, &mut buf)
-            .map_err(|_| TLSError::DecryptError)?
-            .len();
-
-        if plain_len > MAX_FRAGMENT_LEN {
-            return Err(TLSError::PeerSentOversizedRecord);
+            if plain_len > MAX_FRAGMENT_LEN {
+                return Err(TLSError::PeerSentOversizedRecord);
+            }
+            buf.truncate(plain_len);
         }
-        println!("buf decrypted: {:?}", buf);
-        assert!(success);
-
-        buf.truncate(plain_len);
 
         Ok(Message {
             typ: msg.typ,
@@ -524,8 +523,26 @@ impl MessageEncrypter for ChaCha20Poly1305MessageEncrypter {
         let mut buf = Vec::with_capacity(total_len);
         buf.extend_from_slice(&msg.payload);
 
-        self.enc_key.seal_in_place_append_tag(nonce, aad, &mut buf)
-            .map_err(|_| TLSError::General("encrypt failed".to_string()))?;
+
+        let use_hacspec = std::env::var("HACSPEC").unwrap_or("0".to_string()) == "1";
+        if use_hacspec {
+            let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
+            let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
+            let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
+            let hacspec_ptxt = ByteSeq::from_public_slice(&buf);
+            let (hacspec_ctxt, hacspec_tag) = hacspec_encrypt(hacspec_key, hacspec_nonce,
+                                                          &hacspec_aad, &hacspec_ptxt);
+            for (b, ctxt) in buf.iter_mut().zip(hacspec_ctxt.iter()) {
+                *b =  ctxt.declassify();
+            }
+            for &b in hacspec_tag.iter() {
+                buf.push(b);
+            }
+        } else {
+            self.enc_key.seal_in_place_append_tag(nonce, aad, &mut buf)
+                .map_err(|_| TLSError::General("encrypt failed".to_string()))?;
+        }
+
 
         Ok(Message {
             typ: msg.typ,

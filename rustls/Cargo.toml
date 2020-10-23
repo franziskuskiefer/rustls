@@ -17,14 +17,10 @@ log = { version = "0.4.4", optional = true }
 ring = "0.16.11"
 sct = "0.6.0"
 webpki = "0.21.0"
-# hacspec-lib = { git = "https://github.com/hacspec/hacspec" }
-hacspec-lib = { path = "/Users/franziskus/repos/hacspec/lib" }
-# hacspec-chacha20poly1305 = { git = "https://github.com/hacspec/hacspec" }
-hacspec-chacha20poly1305 = { path = "/Users/franziskus/repos/hacspec/examples/hacspec-chacha20poly1305" }
-# hacspec-chacha20 = { git = "https://github.com/hacspec/hacspec" }
-hacspec-chacha20 = { path = "/Users/franziskus/repos/hacspec/examples/hacspec-chacha20" }
-# hacspec-poly1305 = { git = "https://github.com/hacspec/hacspec" }
-hacspec-poly1305 = { path = "/Users/franziskus/repos/hacspec/examples/hacspec-poly1305" }
+hacspec-lib = { git = "https://github.com/hacspec/hacspec" }
+hacspec-chacha20poly1305 = { git = "https://github.com/hacspec/hacspec" }
+hacspec-chacha20 = { git = "https://github.com/hacspec/hacspec" }
+hacspec-poly1305 = { git = "https://github.com/hacspec/hacspec" }
 
 [features]
 default = ["logging"]
