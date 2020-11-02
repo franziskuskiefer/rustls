@@ -411,13 +411,18 @@ impl TLS13MessageDecrypter {
     }
 }
 
+use hacspec_chacha20::{Key as HacspecKey, IV as HacspecNonce};
+use hacspec_chacha20poly1305::{decrypt as hacspec_decrypt, encrypt as hacspec_encrypt};
+use hacspec_lib::*;
+use hacspec_poly1305::Tag as HacspecTag;
+
 /// The RFC7905/RFC7539 ChaCha20Poly1305 construction.
 /// This implementation does the AAD construction required in TLS1.2.
 /// TLS1.3 uses `TLS13MessageEncrypter`.
 pub struct ChaCha20Poly1305MessageEncrypter {
     enc_key: aead::LessSafeKey,
     enc_offset: Iv,
-    raw_key: Vec<u8>,
+    raw_key: Vec<U8>,
 }
 
 /// The RFC7905/RFC7539 ChaCha20Poly1305 construction.
@@ -426,7 +431,7 @@ pub struct ChaCha20Poly1305MessageEncrypter {
 pub struct ChaCha20Poly1305MessageDecrypter {
     dec_key: aead::LessSafeKey,
     dec_offset: Iv,
-    raw_key: Vec<u8>,
+    raw_key: Vec<U8>,
 }
 
 impl ChaCha20Poly1305MessageEncrypter {
@@ -438,7 +443,7 @@ impl ChaCha20Poly1305MessageEncrypter {
         ChaCha20Poly1305MessageEncrypter {
             enc_key: aead::LessSafeKey::new(key),
             enc_offset: enc_iv,
-            raw_key: enc_key.to_vec(),
+            raw_key: enc_key.iter().map(|&b| U8::classify(b)).collect(),
         }
     }
 }
@@ -452,17 +457,13 @@ impl ChaCha20Poly1305MessageDecrypter {
         ChaCha20Poly1305MessageDecrypter {
             dec_key: aead::LessSafeKey::new(key),
             dec_offset: dec_iv,
-            raw_key: dec_key.to_vec(),
+            raw_key: dec_key.iter().map(|&b| U8::classify(b)).collect(),
         }
     }
 }
 
 const CHACHAPOLY1305_OVERHEAD: usize = 16;
 
-use hacspec_chacha20::{Key as HacspecKey, IV as HacspecNonce};
-use hacspec_chacha20poly1305::{decrypt as hacspec_decrypt, encrypt as hacspec_encrypt};
-use hacspec_lib::*;
-use hacspec_poly1305::Tag as HacspecTag;
 
 impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
 
@@ -481,7 +482,7 @@ impl MessageDecrypter for ChaCha20Poly1305MessageDecrypter {
         let use_hacspec = std::env::var("HACSPEC").unwrap_or("0".to_string()) == "1";
         if use_hacspec {
             let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
-            let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
+            let hacspec_key = HacspecKey::from_native_slice(&self.raw_key);
             let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
             let hacspec_ctxt = ByteSeq::from_public_slice(&buf[0..buf.len()-16]);
             let hacspec_tag = HacspecTag::from_native_slice(&buf[buf.len()-16..]);
@@ -527,7 +528,7 @@ impl MessageEncrypter for ChaCha20Poly1305MessageEncrypter {
         let use_hacspec = std::env::var("HACSPEC").unwrap_or("0".to_string()) == "1";
         if use_hacspec {
             let hacspec_nonce = HacspecNonce::from_public_slice(&nonce.as_ref()[..]);
-            let hacspec_key = HacspecKey::from_public_slice(&self.raw_key);
+            let hacspec_key = HacspecKey::from_native_slice(&self.raw_key);
             let hacspec_aad = ByteSeq::from_public_slice(aad.as_ref());
             let hacspec_ptxt = ByteSeq::from_public_slice(&buf);
             let (hacspec_ctxt, hacspec_tag) = hacspec_encrypt(hacspec_key, hacspec_nonce,

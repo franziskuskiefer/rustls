@@ -2,6 +2,8 @@ use std::io;
 use base64;
 use crate::key;
 
+use hacspec_lib::*;
+
 /// Extract and decode all PEM sections from `rd`, which begin with `start_mark`
 /// and end with `end_mark`.  Apply the functor `f` to each decoded buffer,
 /// and return a Vec of `f`'s return values.
@@ -61,7 +63,7 @@ pub fn rsa_private_keys(rd: &mut dyn io::BufRead) -> Result<Vec<key::PrivateKey>
     extract(rd,
             "-----BEGIN RSA PRIVATE KEY-----",
             "-----END RSA PRIVATE KEY-----",
-            &|v| key::PrivateKey(v))
+            &|v| key::PrivateKey(v.iter().map(|&b| U8::classify(b)).collect()))
 }
 
 /// Extract all PKCS8-encoded private keys from rd, and return a vec of
@@ -70,5 +72,5 @@ pub fn pkcs8_private_keys(rd: &mut dyn io::BufRead) -> Result<Vec<key::PrivateKe
     extract(rd,
             "-----BEGIN PRIVATE KEY-----",
             "-----END PRIVATE KEY-----",
-            &|v| key::PrivateKey(v))
+            &|v| key::PrivateKey(v.iter().map(|&b| U8::classify(b)).collect()))
 }

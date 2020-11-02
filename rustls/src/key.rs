@@ -1,5 +1,7 @@
 use std::fmt;
 
+use hacspec_lib::*;
+
 /// This type contains a private key by value.
 ///
 /// The private key must be DER-encoded ASN.1 in either
@@ -7,8 +9,8 @@ use std::fmt;
 ///
 /// `rustls::pemfile::pkcs8_private_keys` or `rustls::pemfile::rsa_private_keys`
 /// could be used to extract private keys from a PEM file in these formats.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct PrivateKey(pub Vec<u8>);
+#[derive(Debug, Clone)]
+pub struct PrivateKey(pub Vec<U8>);
 
 /// This type contains a single certificate by value.
 ///
@@ -24,7 +26,7 @@ impl AsRef<[u8]> for Certificate {
     }
 }
 
-impl fmt::Debug for Certificate {
+impl Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use super::bs_debug::BsDebug;
         f.debug_tuple("Certificate").field(&BsDebug(&self.0)).finish()
