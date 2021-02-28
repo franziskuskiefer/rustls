@@ -267,11 +267,13 @@ fn join_randoms(first: &[u8], second: &[u8]) -> [u8; 64] {
     randoms
 }
 
+use hacspec_lib::*;
+
 /// TLS1.2 per-session keying material
 pub struct SessionSecrets {
     pub randoms: SessionRandoms,
     hash: &'static ring::digest::Algorithm,
-    pub master_secret: [u8; 48],
+    pub master_secret: [U8; 48],
 }
 
 impl SessionSecrets {
@@ -282,7 +284,7 @@ impl SessionSecrets {
         let mut ret = SessionSecrets {
             randoms: randoms.clone(),
             hash: hashalg,
-            master_secret: [0u8; 48],
+            master_secret: [U8(0); 48],
         };
 
         let randoms = join_randoms(&ret.randoms.client, &ret.randoms.server);
@@ -301,7 +303,7 @@ impl SessionSecrets {
         let mut ret = SessionSecrets {
             randoms: randoms.clone(),
             hash: hashalg,
-            master_secret: [0u8; 48]
+            master_secret: [U8(0); 48]
         };
 
         prf::prf(&mut ret.master_secret,
@@ -319,7 +321,7 @@ impl SessionSecrets {
         let mut ret = SessionSecrets {
             randoms: randoms.clone(),
             hash: hashalg,
-            master_secret: [0u8; 48],
+            master_secret: [U8(0); 48],
         };
         ret.master_secret.as_mut().write_all(master_secret).unwrap();
         ret
