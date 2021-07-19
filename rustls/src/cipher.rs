@@ -345,6 +345,7 @@ impl MessageEncrypter for Tls13MessageEncrypter {
         let nonce = make_tls13_nonce(&self.iv, seq);
         let aad = make_tls13_aad(total_len);
 
+        // println!("Rustls encrypt {} bytes", payload.len());
         self.enc_key
             .seal_in_place_append_tag(nonce, aad, &mut payload)
             .map_err(|_| Error::General("encrypt failed".to_string()))?;

@@ -446,9 +446,6 @@ fn bench_bulk(params: &BenchmarkParam, plaintext_size: u64, mtu: Option<usize>) 
 
     do_handshake(&mut client, &mut server);
 
-    let mut buf = Vec::new();
-    buf.resize(plaintext_size as usize, 0u8);
-
     let total_data = apply_work_multiplier(if plaintext_size < 8192 {
         64 * 1024 * 1024
     } else {
@@ -459,6 +456,9 @@ fn bench_bulk(params: &BenchmarkParam, plaintext_size: u64, mtu: Option<usize>) 
     let mut time_recv = 0f64;
 
     for _ in 0..rounds {
+        let mut buf = Vec::new();
+        buf.resize(plaintext_size as usize, 0u8);
+
         time_send += time(|| {
             server.writer().write_all(&buf).unwrap();
             ()
